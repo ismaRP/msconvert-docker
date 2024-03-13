@@ -11,7 +11,7 @@ current_dir = os.getcwd()
 help_string = (
     'Wrapper around Docker container msconvert\n'
     'Usage:\n'
-    'msconver-docker [RAW files] [options]\n'
+    'msconvert-docker [RAW files] [options]\n'
     'Extra options:\n'
     '\t-d\tDry run\n'
     '\t-s\tSupress output from msconvert\n'
