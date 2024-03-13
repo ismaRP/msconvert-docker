@@ -1,0 +1,114 @@
+#!/usr/bin/env python3
+
+import sys
+import os
+import subprocess
+import shlex
+import io
+
+current_dir = os.getcwd()
+
+help_string = (
+    'Wrapper around Docker container msconvert\n'
+    'Usage:\n'
+    'msconver-docker [RAW files] [options]\n'
+    'Extra options:\n'
+    '\t-d\tDry run\n'
+    '\t-s\tSupress output from msconvert\n'
+    'RAW files, -f and -o options and are catched in order to determine the common path'
+    'to use a volume to mount in Docker and run files one by one,\n'
+    'as recommended by msconvert when using with Wine.\n'
+    '\n ----------------'
+    '\n MSconvert help:\n'
+)
+
+argfiles = []
+filelist = []
+newargs = []
+outfolder = ''
+filelist_file = ''
+i = 1
+dryrun = False
+supress_output = False
+while i < len(sys.argv):
+    # Catch arguments
+    if os.path.isfile(sys.argv[i]):
+        argfiles.append(sys.argv[i])
+    elif sys.argv[i] == '-f':
+        i += 1
+        filelist_file = sys.argv[i]
+        infile = open(filelist_file, 'r')
+        filelist = infile.readlines()
+        filelist = [f.rstrip() for f in filelist]
+    elif sys.argv[i] == '-o':
+        i += 1
+        outfolder = sys.argv[i]
+    elif sys.argv[i] == '-d':  # Dry run
+        dryrun = True
+    elif sys.argv[i] == '-s':  # Supress msconvert output
+        supress_output = True
+    elif sys.argv[i] == '--help':
+        # Print help
+        print(help_string)
+        msconvert_help = (
+            'docker run -it --rm -e WINEDEBUG=-all '
+            'chambm/pwiz-skyline-i-agree-to-the-vendor-licenses wine msconvert --help')
+        result = subprocess.run(msconvert_help.split(), capture_output=True)
+        o = io.BytesIO(result.stdout)
+        tio = io.TextIOWrapper(o, newline='\r\n', line_buffering=True)
+        for helpline in tio.readlines():
+            print(helpline.rstrip())
+        sys.exit()
+    else:
+        newargs.append(sys.argv[i])
+    i += 1
+
+argfiles = [os.path.abspath(p) for p in argfiles]
+filelist = [os.path.abspath(p) for p in filelist]
+outfolder = os.path.abspath(outfolder)
+
+common_path = os.path.commonpath(argfiles + filelist + [outfolder])
+print(f'Common path: {common_path}')
+
+argfiles = [os.path.relpath(path, common_path) for path in argfiles]
+filelist = [os.path.relpath(path, common_path) for path in filelist]
+outfolder = os.path.relpath(outfolder, common_path)
+newargs += ['-o', outfolder]
+
+if argfiles:
+    print('Files to run from positional argument:')
+    for f in argfiles:
+        print(f'\t{f}')
+
+if filelist:
+    print(f'Files to run in {filelist_file}:')
+    for f in filelist:
+        print(f'\t{f}')
+
+print(f'\nOutput folder: {outfolder}')
+newargs_string = ' '.join(newargs)
+print(f'Arguments: {newargs_string}')
+
+msconver_docker = (
+    'docker run -it --rm -e WINEDEBUG=-all -v {mount_vol}:/data '
+    'chambm/pwiz-skyline-i-agree-to-the-vendor-licenses wine msconvert '
+    '{rawfile} {arguments}'
+)
+
+if not dryrun:
+    print('\n-------------------------------------------- \n'
+          'Running msconvert ... \n')
+    for rawfile in argfiles + filelist:
+        print(f'Running {rawfile} ...')
+        rawfile = os.path.join('/data', rawfile)
+
+        bashcommand = msconver_docker.format(
+            mount_vol=common_path,
+            rawfile=rawfile,
+            arguments=newargs_string
+        )
+
+        result = subprocess.run(shlex.split(bashcommand), capture_output=True, text=True)
+        print('\tDONE\n')
+        if not supress_output:
+            print(result.stdout)
