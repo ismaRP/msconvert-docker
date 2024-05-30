@@ -32,7 +32,7 @@ dryrun = False
 supress_output = False
 while i < len(sys.argv):
     # Catch arguments
-    if os.path.isfile(sys.argv[i]):
+    if os.path.isfile(sys.argv[i]) or (os.path.isdir(sys.argv[i]) and sys.argv[i].endswith('.d')):
         argfiles.append(sys.argv[i])
     elif sys.argv[i] == '-f':
         i += 1
